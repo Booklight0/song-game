@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!DOCTYPE html><!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -15,32 +15,41 @@
     .input:focus {border:1.5px solid #667eea; outline:none;}
     .round-badge { position:absolute; top:-18px; right:-18px; background:#667eea; color:#fff; font-size:1.04rem; font-weight:600; border-radius:50%; width:46px; height:46px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 7px rgba(90,103,216,0.14); letter-spacing:1px; z-index:2; animation:fadeIn .7s;}
     @keyframes fadeIn {from{opacity:0;transform:scale(0.96);}to{opacity:1;transform:scale(1);}}
+    
     table.leaderboard-table {width:100%; border-collapse:separate; border-spacing:0 8px; margin-top:0.3rem;}
     .leaderboard-table th {text-align:left; font-weight:600; color:#4a5568; font-size:0.95rem; padding-bottom:0.3rem;}
     .leaderboard-table td {font-size:1.02rem; padding:.3rem .5rem; border-radius:8px; background:#f7fafc; vertical-align:middle; text-align:left;}
     .highlight-td {background:#e9edfa; font-weight:700; color:#4c51bf;}
     ul.entries-list {padding:0; margin:0; text-align:left;}
     .animated-list-item { background:#f7fafc; border-radius:9px; padding:.7rem 1.2rem; margin-bottom:0.55rem; font-size:1.09rem; box-shadow:0 1.5px 7px rgba(90,103,216,0.06); animation:fadeIn .35s; list-style:none;}
+    
     .room-code-display { font-size: 2rem; font-weight: bold; letter-spacing: 4px; color: #5a67d8; margin: 1rem 0; background: #eef0fa; padding: 0.5rem; border-radius: 8px;}
     .host-badge { background: #ffd700; color: #856404; font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 12px; vertical-align: middle; margin-left: 5px; font-weight: bold;}
     .corner-btn { position:fixed; top:22px; right:32px; z-index:10; padding:.48rem 1.1rem; font-size:0.99rem; background:#fff; color:#c53030; border:2px solid #fc8181; box-shadow:0 1px 8px rgba(0,0,0,0.11); border-radius:8px; cursor:pointer;}
+    .corner-btn-left { right:auto; left:32px; color:#4852b8; border-color:#667eea; }
+    
+    /* Modal Styles for Leaderboard */
+    .modal-overlay { position:fixed; z-index:99; top:0; left:0; width:100vw; height:100vh; background:rgba(40,50,65,0.4); display:flex; align-items:center; justify-content:center; animation:fadeIn .23s;}
+    .modal-popup { background:#fff; border-radius:16px; box-shadow:0 6px 32px rgba(0,0,0,0.15); min-width:320px; max-width:94vw; padding:2.2rem 2.7rem 1.3rem 2.7rem; animation:fadeIn .26s;}
   </style>
 </head>
 <body>
 
 <div class="centered">
+  <button class="corner-btn corner-btn-left" id="leaderboardBtn" style="display:none;" onclick="showLeaderboard()">🏆 Leaderboard</button>
   <button class="corner-btn" id="leaveBtn" style="display:none;" onclick="leaveRoom()">Leave Game</button>
+  
   <div class="card" id="mainCard">
     <h2>Loading Game...</h2>
   </div>
 </div>
 
+<div id="modalRoot"></div>
+
 <script type="module">
-  // Import Firebase using CDN
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-app.js";
   import { getDatabase, ref, set, onValue, update, remove, get } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-database.js";
 
-  // Your Firebase Configuration
   const firebaseConfig = {
     apiKey: "AIzaSyBkTq54ENwaupCOU8wXW96gmj8Q0YTr7k8",
     authDomain: "song-guessing-game-45795.firebaseapp.com",
@@ -51,17 +60,15 @@
     appId: "1:511453163756:web:9155669794c7386fafb5c9"
   };
 
-  // Initialize Firebase
   const app = initializeApp(firebaseConfig);
   const db = getDatabase(app);
 
-  // App Variables
   let myId = localStorage.getItem('sgg_playerId') || Math.random().toString(36).substring(2, 9);
   localStorage.setItem('sgg_playerId', myId);
   let myName = localStorage.getItem('sgg_playerName') || "";
   let roomCode = localStorage.getItem('sgg_roomCode') || "";
   let isHost = false;
-  let state = null; // Holds the real-time database state
+  let state = null; 
 
   const card = document.getElementById("mainCard");
 
@@ -72,12 +79,12 @@
     onValue(roomRef, (snapshot) => {
       state = snapshot.val();
       if (!state) {
-        // Room was deleted or doesn't exist
         leaveRoom();
         return;
       }
       isHost = (state.host === myId);
       document.getElementById("leaveBtn").style.display = "block";
+      document.getElementById("leaderboardBtn").style.display = "block";
       render();
     });
   }
@@ -88,20 +95,13 @@
     if (!myName) return alert("Please enter your name!");
     localStorage.setItem('sgg_playerName', myName);
     
-    // Generate random 4-letter code
     roomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
     localStorage.setItem('sgg_roomCode', roomCode);
     
-    // Create room in DB
     await set(ref(db, `rooms/${roomCode}`), {
-      host: myId,
-      phase: "lobby",
-      round: 1,
-      players: {
-        [myId]: { name: myName, correct: 0, penalties: 0 }
-      },
-      songs: {},
-      shuffledSongs: []
+      host: myId, phase: "lobby", round: 1,
+      players: { [myId]: { name: myName, correct: 0, penalties: 0 } },
+      songs: {}, shuffledSongs: []
     });
     subscribeToRoom();
   };
@@ -117,7 +117,6 @@
     localStorage.setItem('sgg_playerName', myName);
     localStorage.setItem('sgg_roomCode', roomCode);
 
-    // Add self to room
     await update(ref(db, `rooms/${roomCode}/players`), {
       [myId]: { name: myName, correct: 0, penalties: 0 }
     });
@@ -125,17 +124,14 @@
   };
 
   window.leaveRoom = () => {
-    roomCode = "";
-    state = null;
-    isHost = false;
+    roomCode = ""; state = null; isHost = false;
     localStorage.removeItem('sgg_roomCode');
     document.getElementById("leaveBtn").style.display = "none";
+    document.getElementById("leaderboardBtn").style.display = "none";
     render();
   };
 
-  window.startGame = () => {
-    update(ref(db, `rooms/${roomCode}`), { phase: "songs", songs: null });
-  };
+  window.startGame = () => { update(ref(db, `rooms/${roomCode}`), { phase: "songs", songs: null }); };
 
   window.submitSong = () => {
     const song = document.getElementById("songInp").value.trim();
@@ -145,20 +141,14 @@
 
   window.revealSongs = () => {
     const songVals = Object.values(state.songs || {});
-    // Shuffle array
     for (let i = songVals.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [songVals[i], songVals[j]] = [songVals[j], songVals[i]];
     }
-    update(ref(db, `rooms/${roomCode}`), { 
-      phase: "show_songs", 
-      shuffledSongs: songVals 
-    });
+    update(ref(db, `rooms/${roomCode}`), { phase: "show_songs", shuffledSongs: songVals });
   };
 
-  window.goToScoring = () => {
-    update(ref(db, `rooms/${roomCode}`), { phase: "scoring" });
-  };
+  window.goToScoring = () => { update(ref(db, `rooms/${roomCode}`), { phase: "scoring" }); };
 
   window.saveScores = () => {
     let updates = {};
@@ -170,18 +160,59 @@
     });
     updates['phase'] = "songs";
     updates['round'] = state.round + 1;
-    updates['songs'] = null; // Clear old songs
+    updates['songs'] = null;
     update(ref(db, `rooms/${roomCode}`), updates);
   };
 
-  window.endGame = () => {
-    if(confirm("End the game and show the final leaderboard?")) {
-      update(ref(db, `rooms/${roomCode}`), { phase: "leaderboard" });
-    }
+  // Fixed Play Again function
+  window.playAgain = () => {
+    let updates = { phase: "lobby", round: 1, songs: null, shuffledSongs: null };
+    // Reset all scores
+    Object.keys(state.players).forEach(pid => {
+      updates[`players/${pid}/correct`] = 0;
+      updates[`players/${pid}/penalties`] = 0;
+    });
+    update(ref(db, `rooms/${roomCode}`), updates);
   };
+
+  // Leaderboard Modal Logic
+  window.showLeaderboard = () => {
+    if (!state || !state.players) return;
+    const sortedPlayers = Object.values(state.players).map(p => ({
+      ...p, score: p.correct - p.penalties
+    })).sort((a, b) => b.score - a.score);
+
+    document.getElementById("modalRoot").innerHTML = `
+      <div class="modal-overlay" onclick="closeLeaderboard()">
+        <div class="modal-popup" onclick="event.stopPropagation()">
+          <h2 style="margin:0 0 1rem 0; text-align:center;">Leaderboard 🏆</h2>
+          <table class="leaderboard-table">
+            <thead><tr><th>Rank</th><th>Player</th><th style="text-align:center;">Score</th></tr></thead>
+            <tbody>
+              ${sortedPlayers.map((p, i) => `
+                <tr>
+                  <td style="font-weight:bold; color:#718096;">#${i+1}</td>
+                  <td class="highlight-td">${p.name}</td>
+                  <td style="background:#667eea; color:white; font-weight:bold; border-radius:8px; text-align:center;">${p.score}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          <button class="button" style="margin-top:1.5rem;" onclick="closeLeaderboard()">Close</button>
+        </div>
+      </div>
+    `;
+  };
+  window.closeLeaderboard = () => { document.getElementById("modalRoot").innerHTML = ""; };
+
 
   // --- RENDER UI ---
   function render() {
+    // PRESERVATION LOGIC: Save user input text before redrawing the screen
+    let savedInputs = {};
+    document.querySelectorAll('input').forEach(inp => { if(inp.id) savedInputs[inp.id] = inp.value; });
+    let activeId = document.activeElement ? document.activeElement.id : null;
+
     if (!roomCode || !state) {
       card.innerHTML = `
         <h2 style="color:#444; margin-bottom: 1.5rem;">Song Guessing Game</h2>
@@ -192,131 +223,112 @@
         <input class="input" id="codeInp" placeholder="Room Code (e.g. A4B2)" maxlength="4" style="text-transform: uppercase;">
         <button class="small-btn" onclick="joinRoom()" style="background: #4a5568;">Join Game</button>
       `;
-      return;
-    }
+    } else {
 
-    const pCount = state.players ? Object.keys(state.players).length : 0;
-    let html = state.phase !== "lobby" && state.phase !== "leaderboard" ? `<div class="round-badge">R${state.round}</div>` : "";
+      const pCount = state.players ? Object.keys(state.players).length : 0;
+      let html = state.phase !== "lobby" ? `<div class="round-badge">R${state.round}</div>` : "";
 
-    // PHASE: LOBBY
-    if (state.phase === "lobby") {
-      html += `
-        <h2 style="margin:0; color:#444;">Room Code:</h2>
-        <div class="room-code-display">${roomCode}</div>
-        <div style="text-align:left; margin-top: 1rem;">
-          <h3 style="margin-bottom:0.5rem; color:#4a5568;">Players (${pCount}):</h3>
-          <ul class="entries-list">
-            ${Object.entries(state.players || {}).map(([id, p]) => `<li class="animated-list-item">${p.name} ${id === state.host ? '<span class="host-badge">HOST</span>' : ''}</li>`).join('')}
-          </ul>
-        </div>
-      `;
-      if (isHost) {
-        html += `<button class="button" style="margin-top:20px;" onclick="startGame()" ${pCount < 2 ? 'disabled' : ''}>Start Game</button>`;
-        if (pCount < 2) html += `<div style="font-size:0.85rem; color:#999;">Need at least 2 players to start.</div>`;
-      } else {
-        html += `<div style="margin-top:20px; font-weight:500; color:#667eea;">Waiting for host to start...</div>`;
-      }
-    }
-
-    // PHASE: ENTER SONGS
-    else if (state.phase === "songs") {
-      const mySong = state.songs && state.songs[myId];
-      const submittedCount = state.songs ? Object.keys(state.songs).length : 0;
-
-      if (!mySong) {
+      // LOBBY
+      if (state.phase === "lobby") {
         html += `
-          <h2 style="color:#444;">Your Turn</h2>
-          <div style="color:#666; margin-bottom:1rem;">Secretly enter a song title & artist:</div>
-          <input class="input" id="songInp" placeholder="Song title and artist...">
-          <button class="button" onclick="submitSong()">Lock In Song</button>
-        `;
-      } else {
-        html += `
-          <h2 style="color:#4a5568;">Song Locked In! 🔒</h2>
-          <div style="margin: 1rem 0; padding: 1rem; background: #eef0fa; border-radius: 8px;">Waiting for other players...</div>
-        `;
-      }
-      html += `<div style="margin-top:1rem; font-size:0.9rem; color:#718096;">${submittedCount} / ${pCount} players submitted</div>`;
-      
-      if (isHost) {
-        html += `<button class="small-btn" style="margin-top:2rem; background:#4a5568;" onclick="revealSongs()" ${submittedCount < pCount ? 'disabled' : ''}>Reveal Songs to Everyone</button>`;
-      }
-    }
-
-    // PHASE: SHOW SONGS
-    else if (state.phase === "show_songs") {
-      html += `
-        <h2 style="color:#444; margin-bottom:1rem;">Time to Guess!</h2>
-        <ul class="entries-list">
-          ${(state.shuffledSongs || []).map(song => `<li class="animated-list-item">${song}</li>`).join('')}
-        </ul>
-      `;
-      if (isHost) {
-        html += `<button class="button" style="margin-top:20px;" onclick="goToScoring()">Go to Scoring</button>`;
-      } else {
-        html += `<div style="margin-top:20px; color:#666;">Argue it out! The Host will start scoring soon.</div>`;
-      }
-    }
-
-    // PHASE: SCORING (Only host inputs)
-    else if (state.phase === "scoring") {
-      if (isHost) {
-        html += `
-          <h3 style="margin:0 0 1rem 0;">Round ${state.round} Scoring</h3>
-          <table class="leaderboard-table">
-            <thead><tr><th>Player</th><th>(+)</th><th>(-)</th></tr></thead>
-            <tbody>
-              ${Object.entries(state.players).map(([id, p]) => `
-                <tr>
-                  <td style="font-weight:bold;">${p.name}</td>
-                  <td><input class="input" id="correct_${id}" type="number" min="0" style="min-width:40px; width:40px;" placeholder="0"></td>
-                  <td><input class="input" id="penalty_${id}" type="number" min="0" style="min-width:40px; width:40px;" placeholder="0"></td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-          <button class="button" style="margin-top:1.5rem;" onclick="saveScores()">Save & Next Round</button>
-          <button class="small-btn" style="background:#e53e3e; margin-top:0.5rem;" onclick="endGame()">End Game & Show Leaderboard</button>
-        `;
-      } else {
-        html += `
-          <h2>Scoring Round ${state.round}</h2>
-          <div style="padding: 2rem; color: #4a5568;">
-            Host is assigning points...
-            <br>Look at the big screen (or wait here)!
+          <h2 style="margin:0; color:#444;">Room Code:</h2>
+          <div class="room-code-display">${roomCode}</div>
+          <div style="text-align:left; margin-top: 1rem;">
+            <h3 style="margin-bottom:0.5rem; color:#4a5568;">Players (${pCount}):</h3>
+            <ul class="entries-list">
+              ${Object.entries(state.players || {}).map(([id, p]) => `<li class="animated-list-item">${p.name} ${id === state.host ? '<span class="host-badge">HOST</span>' : ''}</li>`).join('')}
+            </ul>
           </div>
         `;
+        if (isHost) {
+          html += `<button class="button" style="margin-top:20px;" onclick="startGame()" ${pCount < 2 ? 'disabled' : ''}>Start Game</button>`;
+          if (pCount < 2) html += `<div style="font-size:0.85rem; color:#999;">Need at least 2 players to start.</div>`;
+        } else html += `<div style="margin-top:20px; font-weight:500; color:#667eea;">Waiting for host to start...</div>`;
+      }
+
+      // ENTER SONGS
+      else if (state.phase === "songs") {
+        const mySong = state.songs && state.songs[myId];
+        const submittedCount = state.songs ? Object.keys(state.songs).length : 0;
+
+        if (!mySong) {
+          html += `
+            <h2 style="color:#444;">Your Turn</h2>
+            <div style="color:#666; margin-bottom:1rem;">Secretly enter a song title & artist:</div>
+            <input class="input" id="songInp" placeholder="Song title and artist...">
+            <button class="button" onclick="submitSong()">Lock In Song</button>
+          `;
+        } else {
+          html += `
+            <h2 style="color:#4a5568;">Song Locked In! 🔒</h2>
+            <div style="margin: 1rem 0; padding: 1rem; background: #eef0fa; border-radius: 8px;">Waiting for other players...</div>
+          `;
+        }
+        html += `<div style="margin-top:1rem; font-size:0.9rem; color:#718096;">${submittedCount} / ${pCount} players submitted</div>`;
+        
+        if (isHost) html += `<button class="small-btn" style="margin-top:2rem; background:#4a5568;" onclick="revealSongs()" ${submittedCount < pCount ? 'disabled' : ''}>Reveal Songs to Everyone</button>`;
+      }
+
+      // SHOW SONGS
+      else if (state.phase === "show_songs") {
+        html += `
+          <h2 style="color:#444; margin-bottom:1rem;">Time to Guess!</h2>
+          <ul class="entries-list">
+            ${(state.shuffledSongs || []).map(song => `<li class="animated-list-item">${song}</li>`).join('')}
+          </ul>
+        `;
+        if (isHost) html += `<button class="button" style="margin-top:20px;" onclick="goToScoring()">Go to Scoring</button>`;
+        else html += `<div style="margin-top:20px; color:#666;">Argue it out! The Host will start scoring soon.</div>`;
+      }
+
+      // SCORING
+      else if (state.phase === "scoring") {
+        if (isHost) {
+          html += `
+            <h3 style="margin:0 0 1rem 0;">Round ${state.round} Scoring</h3>
+            <table class="leaderboard-table">
+              <thead><tr><th>Player</th><th>(+)</th><th>(-)</th></tr></thead>
+              <tbody>
+                ${Object.entries(state.players).map(([id, p]) => `
+                  <tr>
+                    <td style="font-weight:bold;">${p.name}</td>
+                    <td><input class="input" id="correct_${id}" type="number" min="0" style="min-width:40px; width:40px;" placeholder="0"></td>
+                    <td><input class="input" id="penalty_${id}" type="number" min="0" style="min-width:40px; width:40px;" placeholder="0"></td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+            <button class="button" style="margin-top:1.5rem;" onclick="saveScores()">Save & Next Round</button>
+            <button class="small-btn" style="background:#e53e3e; margin-top:0.5rem;" onclick="playAgain()">End Game & Restart</button>
+          `;
+        } else {
+          html += `
+            <h2>Scoring Round ${state.round}</h2>
+            <div style="padding: 2rem; color: #4a5568;">Host is assigning points...</div>
+          `;
+        }
+      }
+
+      card.innerHTML = html;
+    }
+
+    // RESTORE LOGIC: Put the typed text back into the boxes so you don't lose it
+    Object.keys(savedInputs).forEach(id => {
+      let el = document.getElementById(id);
+      if(el) el.value = savedInputs[id];
+    });
+    // Keep the keyboard open on mobile if they were typing
+    if(activeId) {
+      let activeEl = document.getElementById(activeId);
+      if(activeEl) {
+        activeEl.focus();
+        let val = activeEl.value;
+        activeEl.value = ''; // Tricks the cursor to move to the end of the word
+        activeEl.value = val;
       }
     }
-
-    // PHASE: LEADERBOARD / END
-    else if (state.phase === "leaderboard") {
-      const sortedPlayers = Object.values(state.players).map(p => ({
-        ...p, score: p.correct - p.penalties
-      })).sort((a, b) => b.score - a.score);
-
-      html += `
-        <h2>Final Leaderboard 🏆</h2>
-        <table class="leaderboard-table">
-          <thead><tr><th>Rank</th><th>Player</th><th>Score</th></tr></thead>
-          <tbody>
-            ${sortedPlayers.map((p, i) => `
-              <tr>
-                <td style="font-weight:bold; color:#718096;">#${i+1}</td>
-                <td class="highlight-td">${p.name}</td>
-                <td style="background:#667eea; color:white; font-weight:bold; border-radius:8px;">${p.score}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-        ${isHost ? `<button class="button" style="margin-top:2rem;" onclick="update(ref(db, 'rooms/${roomCode}'), {phase: 'lobby', round: 1})">Play Again (Same Room)</button>` : '<div style="margin-top:2rem; color:#666;">Waiting for Host to restart or close room.</div>'}
-      `;
-    }
-
-    card.innerHTML = html;
   }
 
-  // Attempt to reconnect if reloading
   if (roomCode) subscribeToRoom();
   else render();
 
