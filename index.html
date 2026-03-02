@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Song Guessing Game</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <style>
+    body { margin:0; font-family:'Inter',Arial,sans-serif; background:#fafbfc; min-height:100vh;}
+    .centered { min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center;}
+    .card { background:#fff; box-shadow:0 6px 32px rgba(0,0,0,0.10),0 1.5px 6px rgba(0,0,0,0.03); border-radius:16px; padding:2.2rem 2.3rem; min-width:350px; margin-bottom:2rem; position:relative; animation:fadeIn .5s;}
+    .button, .reset-btn, .corner-btn, .small-btn { background:linear-gradient(90deg,#667eea 0%,#5a67d8 100%); color:#fff; border:none; border-radius:8px; padding:.75rem 1.7rem; margin:0 0.5rem; font-size:1rem; font-weight:500; cursor:pointer; transition:box-shadow .15s, background .18s; box-shadow:0 2px 8px rgba(90,103,216,0.08);}
+    .button:hover, .small-btn:hover {background:linear-gradient(90deg,#5a67d8 0%,#667eea 100%); box-shadow:0 6px 20px rgba(90,103,216,0.12);}
+    .small-btn {padding:.4rem 1.1rem; font-size:0.93rem; margin:0 0.2rem;}
+    .small-btn:disabled {background:#ccc; box-shadow:none; cursor:not-allowed;}
+    .reset-btn { background:#fff; color:#667eea; border:2px solid #667eea; box-shadow:none; margin-top:1.1rem;}
+    .reset-btn:hover {background:#f7fafc; color:#4852b8; border:2px solid #5a67d8;}
+    .corner-btn { position:fixed; top:22px; right:32px; z-index:10; padding:.48rem 1.1rem; font-size:0.99rem; background:#fff; color:#4852b8; border:2px solid #667eea; box-shadow:0 1px 8px rgba(90,103,216,0.11);}
+    .corner-btn:hover {background:#eef0fa; color:#5a67d8;}
+    .input { padding:0.6rem 1.1rem; font-size:1rem; border:1.5px solid #e2e8f0; border-radius:8px; margin:0.4rem 0.7rem 0.4rem 0; min-width:140px; background:#f7fafc; transition:border 0.18s;}
+    .input:focus {border:1.5px solid #667eea; outline:none;}
+    .round-badge { position:absolute; top:-18px; right:-18px; background:#667eea; color:#fff; font-size:1.04rem; font-weight:600; border-radius:50%; width:46px; height:46px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 7px rgba(90,103,216,0.14); letter-spacing:1px; z-index:2; animation:fadeIn .7s;}
+    @keyframes fadeIn {from{opacity:0;transform:scale(0.96);}to{opacity:1;transform:scale(1);}}
+    .modal-overlay { position:fixed; z-index:99; top:0; left:0; width:100vw; height:100vh; background:rgba(40,50,65,0.18); display:flex; align-items:center; justify-content:center; animation:fadeIn .23s;}
+    .modal-popup { background:#fff; border-radius:16px; box-shadow:0 6px 32px rgba(0,0,0,0.15); min-width:320px; max-width:94vw; padding:2.2rem 2.7rem 1.3rem 2.7rem; animation:fadeIn .26s;}
+    table.leaderboard-table {width:100%; border-collapse:separate; border-spacing:0 8px; margin-top:0.3rem;}
+    .leaderboard-table th {text-align:left; font-weight:600; color:#4a5568; font-size:0.95rem; padding-bottom:0.3rem;}
+    .leaderboard-table td {font-size:1.02rem; padding:.3rem .5rem; border-radius:8px; background:#f7fafc; vertical-align:middle;}
+    .highlight-td {background:#e9edfa; font-weight:700; color:#4c51bf;}
+    .score-total {background:#667eea !important; color:#fff !important; font-weight:700;}
+    ul.entries-list {padding:0; margin:0;}
+    .animated-list-item { background:#f7fafc; border-radius:9px; padding:.7rem 1.2rem; margin-bottom:0.55rem; font-size:1.09rem; box-shadow:0 1.5px 7px rgba(90,103,216,0.06); animation:fadeIn .35s; list-style:none;}
+    .breakdown-list { max-height:40vh; overflow-y:auto; padding-right:10px; margin:0;}
+  </style>
+</head>
+<body>
+<div class="centered">
+  <button class="corner-btn" id="leaderboardBtn">Leaderboard</button>
+  <button class="reset-btn" id="resetBtn">Reset / New Game</button>
+  <div class="card" id="mainCard"></div>
+</div>
+<div id="modalRoot"></div>
+
+<script>
+  let phase = "player_name", players = [], currentPlayerIdx = 0, songs = [], shuffledOrder = [], round = 1, scores = [];
+  const $ = selector => document.querySelector(selector);
+
+  function saveState() {
+    localStorage.setItem('songGameState', JSON.stringify({ phase, players, currentPlayerIdx, songs, shuffledOrder, round, scores }));
+  }
+
+  function loadState() {
+    const s = JSON.parse(localStorage.getItem('songGameState') || "{}");
+    if(s.phase) { phase=s.phase; players=s.players; currentPlayerIdx=s.currentPlayerIdx; songs=s.songs; shuffledOrder=s.shuffledOrder; round=s.round; scores=s.scores; }
+  }
+
+  function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; }
+    return arr;
+  }
+
+  function render() {
+    const card = $("#mainCard");
+    let html = phase !== "player_name" ? `<div class="round-badge">R${round}</div>` : "";
+
+    if (phase === "player_name") {
+      html += `
+        <h2 style="margin:0 0 0.7rem 0;color:#444;">Add Players</h2>
+        <div style="font-weight:600;margin-bottom:0.3rem;">Player ${players.length + 1} Name</div>
+        <input class="input" placeholder="Enter name..." id="nameInp">
+        <div style="margin-top:12px;display:flex;gap:0.7rem;">
+          <button class="small-btn" id="addBtn">Add & Next</button>
+          <button class="small-btn" id="startBtn" ${players.length < 1 ? 'disabled' : ''}>Start Game</button>
+        </div>
+        ${players.length < 1 ? '<div style="font-size:0.9rem;color:#999;margin-top:0.8rem;">Add at least 1 player to continue.</div>' : ''}
+      `;
+      card.innerHTML = html;
+      const addPlayer = () => { const v = $("#nameInp").value.trim(); if(v){ players.push({name: v}); saveState(); render(); }};
+      $("#addBtn").onclick = addPlayer;
+      $("#nameInp").onkeydown = e => { if (e.key === "Enter") addPlayer(); };
+      $("#startBtn").onclick = () => { if (players.length) { phase = "songs"; currentPlayerIdx = 0; songs = []; saveState(); render(); }};
+    } 
+    
+    else if (phase === "songs") {
+      html += `
+        <div style="font-weight:600;font-size:1.15rem;margin-bottom:0.5rem;">It's ${players[currentPlayerIdx].name}'s turn!</div>
+        <div style="color:#666;margin-bottom:1rem;">Secretly enter a song you like:</div>
+        <form id="songForm">
+          <input class="input" placeholder="Song title and artist" id="songInp">
+          <button class="small-btn" type="submit">${currentPlayerIdx === players.length - 1 ? "Finish & Reveal" : "Next Player"}</button>
+        </form>
+      `;
+      card.innerHTML = html;
+      $("#songForm").onsubmit = e => {
+        e.preventDefault();
+        const v = $("#songInp").value.trim();
+        if(!v) return;
+        songs.push({ playerIdx: currentPlayerIdx, song: v });
+        if (currentPlayerIdx < players.length - 1) currentPlayerIdx++;
+        else { shuffledOrder = shuffle([...Array(players.length).keys()]); phase = "show_songs"; }
+        saveState(); render();
+      };
+    } 
+    
+    else if (phase === "show_songs") {
+      html += `
+        <div style="font-weight:600;font-size:1.17rem;margin-bottom:1rem;">Time to Guess! (Randomized Order)</div>
+        <ul class="entries-list">
+          ${shuffledOrder.map(idx => `<li class="animated-list-item">${songs[idx].song}</li>`).join('')}
+        </ul>
+        <button class="button" style="margin-top:20px;" id="goScoreBtn">Go to Scoring</button>
+      `;
+      card.innerHTML = html;
+      $("#goScoreBtn").onclick = () => { phase = "scoring"; saveState(); render(); };
+    } 
+    
+    else if (phase === "scoring") {
+      html += `
+        <h3 style="margin:0 0 1rem 0;">Round ${round} Scoring</h3>
+        <table class="leaderboard-table">
+          <thead><tr><th>Player</th><th>Correct (+)</th><th>Guessed (-)</th></tr></thead>
+          <tbody>
+            ${players.map((p, i) => `
+              <tr>
+                <td style="font-weight:bold;">${p.name}</td>
+                <td><input class="input correct-inp" type="number" min="0" style="min-width:50px;" placeholder="0"></td>
+                <td><input class="input penalty-inp" type="number" min="0" style="min-width:50px;" placeholder="0"></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        <button class="button" style="margin-top:1.5rem;" id="saveScoreBtn">Save Scores & Next Round</button>
+      `;
+      card.innerHTML = html;
+      $("#saveScoreBtn").onclick = () => {
+        document.querySelectorAll('table.leaderboard-table tbody tr').forEach((row, idx) => {
+          scores.push({
+            playerIdx: idx, round: round,
+            correct: Number(row.querySelector('.correct-inp').value) || 0,
+            penalties: Number(row.querySelector('.penalty-inp').value) || 0
+          });
+        });
+        round++; phase = "songs"; songs = []; currentPlayerIdx = 0; shuffledOrder = [];
+        saveState(); render();
+      };
+    }
+    setTimeout(() => { const inp = $(".input"); if(inp) inp.focus(); }, 80);
+  }
+
+  function showLeaderboard() {
+    const data = players.map((p, idx) => {
+      const s = scores.filter(x => x.playerIdx === idx);
+      const c = s.reduce((acc, val) => acc + val.correct, 0);
+      const pen = s.reduce((acc, val) => acc + val.penalties, 0);
+      return { name: p.name, c, pen, score: c - pen, bd: s };
+    }).sort((a, b) => b.score - a.score);
+
+    $("#modalRoot").innerHTML = `
+      <div class="modal-overlay" id="closeOverlay">
+        <div class="modal-popup" onclick="event.stopPropagation()">
+          <h2 style="margin:0 0 1rem 0;">Leaderboard</h2>
+          <table class="leaderboard-table">
+            <thead><tr><th>Player</th><th>(+)</th><th>(-)</th><th>Score</th></tr></thead>
+            <tbody>
+              ${data.map(p => `<tr><td class="highlight-td">${p.name}</td><td style="color:#2b6cb0;">+${p.c}</td><td style="color:#c53030;">-${p.pen}</td><td class="score-total">${p.score}</td></tr>`).join('')}
+            </tbody>
+          </table>
+          <div style="font-weight:500;margin-top:1.5rem;">Round Breakdown:</div>
+          <ul class="breakdown-list" style="list-style:none;padding-left:0;">
+            ${data.map(p => `<li style="margin:0.8rem 0;">
+                <div style="font-weight:600;color:#4852b8;">${p.name}</div>
+                ${p.bd.length ? p.bd.map(b => `<span style="background:#eef0fa;border-radius:5px;padding:0.2rem 0.5rem;margin:0.2rem 0.3rem 0 0;display:inline-block;font-size:0.85rem;"><b>R${b.round}:</b> <span style="color:#2b6cb0;">+${b.correct}</span> / <span style="color:#c53030;">-${b.penalties}</span></span>`).join('') 
+                : '<div style="color:#999;font-size:0.85rem;">No rounds played yet.</div>'}
+              </li>`).join('')}
+          </ul>
+          <button class="button" style="margin-top:1rem;width:100%;" onclick="document.getElementById('modalRoot').innerHTML=''">Close Leaderboard</button>
+        </div>
+      </div>
+    `;
+    $("#closeOverlay").onclick = () => $("#modalRoot").innerHTML = "";
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    loadState();
+    render();
+    $("#leaderboardBtn").onclick = showLeaderboard;
+    $("#resetBtn").onclick = () => {
+      if(confirm("Are you sure you want to reset the game? All scores will be lost!")) {
+        localStorage.removeItem('songGameState');
+        phase = "player_name"; players = []; currentPlayerIdx = 0; songs = []; shuffledOrder = []; round = 1; scores = [];
+        $("#modalRoot").innerHTML = ""; render();
+      }
+    };
+  });
+</script>
+</body>
+</html>
